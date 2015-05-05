@@ -49,6 +49,7 @@
 #include <math.h>
 #include <fcntl.h>
 #include <poll.h>
+#include <time.h>
 #include <sys/ioctl.h>
 #include <drivers/drv_hrt.h>
 #include <arch/board/board.h>
@@ -89,8 +90,15 @@ private:
 	int 		_main_task;
 	int		_mavlink_fd;
 
+	int		_command_sub;
+	struct vehicle_command_s	_command;
+
 
 	void task_main();
+
+	void handle_command(struct vehicle_command_s *cmd);
+
+	void answer_command(struct vehicle_command_s *cmd, enum VEHICLE_CMD_RESULT result);
 
 	/**
 	 * Shim for calling task_main from task_create.
@@ -106,7 +114,8 @@ namespace mapping
 Mapping::Mapping() :
 	_task_should_exit(false),
 	_main_task(-1),
-	_mavlink_fd(-1)
+	_mavlink_fd(-1),
+	_command_sub(-1)
 {	
 }
 
@@ -159,13 +168,76 @@ void Mapping::task_main()
 {
 	_mavlink_fd = open(MAVLINK_LOG_DEVICE, 0);
 	mavlink_log_info(_mavlink_fd, "[mapping] started");
-	warnx("started");
-	//_command_sub = orb_subscribe(ORB_ID(vehicle_command));
+
+	warnx("started.");
+
+	_command_sub = orb_subscribe(ORB_ID(vehicle_command));
+
+	// wakeup source(s)
+	struct pollfd fds[1];
+
+	// Setup of loop
+	fds[0].fd = _command_sub;
+	fds[0].events = POLLIN;
+
+	while (!_task_should_exit) {
+
+		warnx("boucle");
+
+		/* wait for up to 100ms for data */
+		int pret = poll(&fds[0], (sizeof(fds) / sizeof(fds[0])), 50);
+
+		/* this is undesirable but not much we can do - might want to flag unhappy status */
+		if (pret < 0) {
+			warn("poll error %d, %d", pret, errno);
+			continue;
+		}
+
+		/* vehicle commands updated */
+		if (fds[0].revents & POLLIN) {
+			orb_copy(ORB_ID(vehicle_command), _command_sub, &_command);
+			handle_command(&_command);
+		}
+
+
+		//orb_check(vehicle_global_position_sub, &updated);
+		//if (updated) {
+		//	/* copy global position */
+		//	orb_copy(ORB_ID(vehicle_global_position), vehicle_global_position_sub, &_global_pos);
+		//}
+
+		//if (_global_pos.timestamp == 0) {
+		//	continue;
+		//}
+
+		const unsigned sleeptime_us = 9500;
+
+		// run at roughly 100 Hz
+		usleep(sleeptime_us);
+	}
+
 
 	warnx("exiting.");
 
 	_main_task = -1;
 	_exit(0);
+}
+
+void Mapping::handle_command(struct vehicle_command_s *cmd)
+{
+	switch (cmd->command) {
+		default:
+			warnx("default command break");
+			break;
+	}
+}
+
+void Mapping::answer_command(struct vehicle_command_s *cmd, enum VEHICLE_CMD_RESULT result)
+{
+	switch (result) {
+		default:
+			break;
+	}
 }
 
 void Mapping::task_main_trampoline(int argc, char *argv[])
