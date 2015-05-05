@@ -134,6 +134,11 @@ MODULES		+= examples/flow_position_estimator
 MODULES		+= examples/rover_steering_control
 
 #
+# Mapping
+#
+MODULES 	+= modules/mapping
+
+#
 # Demo apps
 #
 #MODULES		+= examples/math_demo

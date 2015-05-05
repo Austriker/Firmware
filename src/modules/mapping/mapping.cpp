@@ -41,24 +41,185 @@
  */
 
 #include <nuttx/config.h>
-#include <unistd.h>
 #include <stdio.h>
-#include <poll.h>
+#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <errno.h>
+#include <math.h>
+#include <fcntl.h>
+#include <poll.h>
+#include <sys/ioctl.h>
+#include <drivers/drv_hrt.h>
+#include <arch/board/board.h>
 
 #include <uORB/uORB.h>
 #include <uORB/topics/vehicle_command.h>
-#include <uORB/topics/actuator_controls.h>
-#include <uORB/topics/actuator_controls_0.h>
-#include <uORB/topics/actuator_controls_1.h>
-#include <uORB/topics/actuator_controls_2.h>
-#include <uORB/topics/actuator_controls_3.h>
 
-__EXPORT int mapping_main(int argc, char *argv[]);
+#include <systemlib/systemlib.h>
+#include <systemlib/param/param.h>
+#include <systemlib/err.h>
+#include <mavlink/mavlink_log.h>
+
+
+extern "C" __EXPORT int mapping_main(int argc, char *argv[]);
+
+class Mapping
+{
+public:
+	/**
+	 * Constructor
+	 */
+	Mapping();
+
+	/**
+	 * Destructor
+	 */
+	~Mapping();
+
+	/**
+	 * Start the task.
+	 *
+	 * @return 	OK on success.
+	 */
+	int start();
+
+private:
+	bool 		_task_should_exit;
+	int 		_main_task;
+	int		_mavlink_fd;
+
+
+	void task_main();
+
+	/**
+	 * Shim for calling task_main from task_create.
+	 */
+	static void task_main_trampoline(int argc, char *argv[]);
+};
+
+namespace mapping
+{
+	Mapping *g_mapping;
+}
+
+Mapping::Mapping() :
+	_task_should_exit(false),
+	_main_task(-1),
+	_mavlink_fd(-1)
+{	
+}
+
+Mapping::~Mapping()
+{
+	if (_main_task != -1) {
+
+		/* task wakes up every 100ms or so at the longest */
+		_task_should_exit = true;
+
+		/* wait for a second for the task to quit at our request */
+		unsigned i = 0;
+
+		do {
+			/* wait 20ms */
+			usleep(20000);
+
+			/* if we have given up, kill it */
+			if (++i > 50) {
+				task_delete(_main_task);
+				break;
+			}
+		} while (_main_task != -1);
+	}
+
+	mapping::g_mapping = nullptr;
+}
+
+int Mapping::start()
+{
+	ASSERT(_main_task == -1);
+
+	/* start the task */
+	_main_task = task_spawn_cmd("mapping",
+				    SCHED_DEFAULT,
+				    SCHED_PRIORITY_DEFAULT + 15,
+				    1500,
+				    (main_t)&Mapping::task_main_trampoline,
+				    nullptr);
+
+	if (_main_task < 0) {
+		warn("task start failed");
+		return -errno;
+	}
+
+	return OK;
+}
+
+void Mapping::task_main()
+{
+	_mavlink_fd = open(MAVLINK_LOG_DEVICE, 0);
+	mavlink_log_info(_mavlink_fd, "[mapping] started");
+	warnx("started");
+	//_command_sub = orb_subscribe(ORB_ID(vehicle_command));
+
+	warnx("exiting.");
+
+	_main_task = -1;
+	_exit(0);
+}
+
+void Mapping::task_main_trampoline(int argc, char *argv[])
+{
+	mapping::g_mapping->task_main();
+}
 
 int mapping_main(int argc, char *argv[])
 {
+	if (argc < 2) {
+		errx(1, "usage: mapping {start|stop|status}");
+	}
 
+	
+	if (!strcmp(argv[1], "start")) {
 
-	return 0;
+		if (mapping::g_mapping != nullptr) {
+			errx(1, "already running");
+		}
+
+		mapping::g_mapping = new Mapping;
+
+		if (mapping::g_mapping == nullptr) {
+			errx(1, "alloc failed");
+		}
+
+		if (OK != mapping::g_mapping->start()) {
+			delete mapping::g_mapping;
+			mapping::g_mapping = nullptr;
+			err(1, "start failed");
+		}
+
+		exit(0);
+	}
+
+	if (!strcmp(argv[1], "stop")) {
+		if (mapping::g_mapping == nullptr) {
+			errx(1, "not running");
+		}
+
+		delete mapping::g_mapping;
+		mapping::g_mapping = nullptr;
+		exit(0);
+	}
+
+	if (!strcmp(argv[1], "status")) {
+		if (mapping::g_mapping) {
+			errx(0, "running");
+
+		} else {
+			errx(1, "not running");
+		}
+	}
+
+	warnx("unrecognized command");
+	return 1;
 }
