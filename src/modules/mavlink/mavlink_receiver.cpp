@@ -209,6 +209,10 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 		handle_message_timesync(msg);
 		break;
 
+	case MAVLINK_MSG_ID_MAPPING_CONTROL:
+		handle_message_mapping_control(msg);
+		break;
+
 	default:
 		break;
 	}
@@ -1477,6 +1481,26 @@ MavlinkReceiver::handle_message_hil_state_quaternion(mavlink_message_t *msg)
 	}
 }
 
+void MavlinkReceiver::handle_message_mapping_control(mavlink_message_t *msg)
+{
+	/* mapping_control */
+	mavlink_mapping_control_t map_ctrl;
+	mavlink_msg_mapping_control_decode(msg, &map_ctrl);
+
+	struct mapping_control_s f;
+	memset(&f, 0, sizeof(f));
+
+	f.timestamp = hrt_absolute_time();
+	f.trigger_camera_count = map_ctrl.trigger_camera_count;
+	f.lat = map_ctrl.lat;
+	f.lon = map_ctrl.lon;
+
+	if (_map_ctrl_pub<= 0) {
+		_map_ctrl_pub = orb_advertise(ORB_ID(mapping_control), &f);
+	} else {
+		orb_publish(ORB_ID(mapping_control), _map_ctrl_pub, &f);
+	}
+}
 
 /**
  * Receive data from UART.

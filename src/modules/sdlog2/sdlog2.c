@@ -100,6 +100,7 @@
 #include <uORB/topics/vtol_vehicle_status.h>
 #include <uORB/topics/time_offset.h>
 #include <uORB/topics/mc_att_ctrl_status.h>
+#include <uORB/topics/mapping_control.h>
 
 #include <systemlib/systemlib.h>
 #include <systemlib/param/param.h>
@@ -1036,6 +1037,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 		struct vtol_vehicle_status_s vtol_status;
 		struct time_offset_s time_offset;
 		struct mc_att_ctrl_status_s mc_att_ctrl_status;
+		struct map_ctrl_s map_ctrl;
 	} buf;
 
 	memset(&buf, 0, sizeof(buf));
@@ -1082,6 +1084,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 			struct log_ENCD_s log_ENCD;
 			struct log_TSYN_s log_TSYN;
 			struct log_MACS_s log_MACS;
+			struct log_MAPCTRL_s log_MAPCTRL;
 		} body;
 	} log_msg = {
 		LOG_PACKET_HEADER_INIT(0)
@@ -1124,6 +1127,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 		int encoders_sub;
 		int tsync_sub;
 		int mc_att_ctrl_status_sub;
+		int map_ctrl_sub;
 	} subs;
 
 	subs.cmd_sub = -1;
@@ -1158,6 +1162,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 	subs.tsync_sub = -1;
 	subs.mc_att_ctrl_status_sub = -1;
 	subs.encoders_sub = -1;
+	subs.map_ctrl_sub = -1;
 
 	/* add new topics HERE */
 
@@ -1844,6 +1849,16 @@ int sdlog2_thread_main(int argc, char *argv[])
 			log_msg.body.log_MACS.yaw_rate_integ = buf.mc_att_ctrl_status.yaw_rate_integ;
 			LOGBUFFER_WRITE_AND_COUNT(MACS);
 		}
+
+		/* --- MAPPING_CONTROL --- */
+		if (copy_if_updated(ORB_ID(mapping_control), subs.map_ctrl_sub, &buf.map_ctrl)) {
+			log_msg.msg_type = LOG_MAPCTRL_MSG;
+			log_msg.body.log_MAPCTRL.timestamp = buf.map_ctrl.timestamp;
+			log_msg.body.log_MAPCTRL.trigger_camera_count = buf.map_ctrl.trigger_camera_count;
+			log_msg.body.log_MAPCTRL.lat = buf.map_ctrl.lat;
+			log_msg.body.log_MAPCTRL.lon = buf.map_ctrl.lon;
+			LOGBUFFER_WRITE_AND_COUNT(MAPCTRL);
+		} 
 
 		/* signal the other thread new data, but not yet unlock */
 		if (logbuffer_count(&lb) > MIN_BYTES_TO_WRITE) {
