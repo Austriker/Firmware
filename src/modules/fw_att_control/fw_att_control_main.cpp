@@ -199,6 +199,7 @@ private:
 		float pitchsp_offset_rad;			/**< Pitch Setpoint Offset in rad */
 		float man_roll_max;						/**< Max Roll in rad */
 		float man_pitch_max;					/**< Max Pitch in rad */
+		int vt_att_transform;
 
 	}		_parameters;			/**< local copies of interesting parameters */
 
@@ -240,6 +241,7 @@ private:
 		param_t pitchsp_offset_deg;
 		param_t man_roll_max;
 		param_t man_pitch_max;
+		param_t vt_att_transform;
 
 	}		_parameter_handles;		/**< handles for interesting parameters */
 
@@ -404,6 +406,8 @@ FixedwingAttitudeControl::FixedwingAttitudeControl() :
 	_parameter_handles.man_roll_max = param_find("FW_MAN_R_MAX");
 	_parameter_handles.man_pitch_max = param_find("FW_MAN_P_MAX");
 
+	_parameter_handles.vt_att_transform = param_find("FW_VT_ATT_TRANSF");
+
 	/* fetch initial parameter values */
 	parameters_update();
 }
@@ -480,6 +484,8 @@ FixedwingAttitudeControl::parameters_update()
 	param_get(_parameter_handles.man_pitch_max, &(_parameters.man_pitch_max));
 	_parameters.man_roll_max = math::radians(_parameters.man_roll_max);
 	_parameters.man_pitch_max = math::radians(_parameters.man_pitch_max);
+
+	param_get(_parameter_handles.vt_att_transform, &(_parameters.vt_att_transform));
 
 	/* pitch control parameters */
 	_pitch_ctrl.set_time_constant(_parameters.tconst);
@@ -707,7 +713,7 @@ FixedwingAttitudeControl::task_main()
 			/* load local copies */
 			orb_copy(ORB_ID(vehicle_attitude), _att_sub, &_att);
 
-			if (false) {	// FireFly6 is not a tailsitter
+			if (_vehicle_status.is_vtol && _parameters.vt_att_transform == 0) {
 				/* vehicle type is VTOL, need to modify attitude!
 				 * The following modification to the attitude is vehicle specific and in this case applies
 				 *  to tail-sitter models !!!

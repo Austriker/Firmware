@@ -390,3 +390,14 @@ PARAM_DEFINE_FLOAT(FW_MAN_R_MAX, 45.0f);
  * @group FW Attitude Control
  */
 PARAM_DEFINE_FLOAT(FW_MAN_P_MAX, 45.0f);
+
+/**
+ * VTOL attitude transformation
+ *
+ * Set to 1 if the VTOL airframe doesn't require attitude modification
+ *
+ * @min 0
+ * @max 1
+ * @group FW Attitude Control
+ */
+PARAM_DEFINE_INT32(FW_VT_ATT_TRANSF, 0);
